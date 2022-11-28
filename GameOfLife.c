@@ -3,6 +3,8 @@
 #include <strings.h>
 #include "mpi.h"
 
+#define prox ((processId + 1) % noProcesses)
+
 int** tab_init(int noProcesses){
 
 	int **ret = (int**)malloc(sizeof(int*) * 2048/noProcesses + 2);
@@ -50,7 +52,10 @@ int main(int argc, char** argv){
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
+
+	printf("%d prox-> %d\n", processId, ((processId + 1) % noProcesses));fflush(stdout);
 	
+	free(grid);
 	return 0;
 
 }
