@@ -5,6 +5,7 @@
 
 #define PROX ((processId + 1) % noProcesses)
 #define ANTE ((noProcesses + processId - 1) % noProcesses)
+#define NUNM_IT 2000
 #define SIZE 2048
 #define CHUNK_SIZE 2048/noProcesses + 2
 
@@ -52,6 +53,14 @@ void comunicacao(int **tab, int prox, int ante, int chunk, MPI_Status status){
 
 }
 
+void iteracao(int **grid, int chunk, int prox, int ante, MPI_Status status){
+
+	for(int i = 0; i < NUNM_IT; i++){
+		comunicacao(grid, prox, ante, chunk, status);
+	}
+
+}
+
 int main(int argc, char** argv){
 
 	int processId; /* rank dos processos */
@@ -90,9 +99,7 @@ int main(int argc, char** argv){
 	MPI_Barrier(MPI_COMM_WORLD);
 	int prox = PROX, ante = ANTE, chunk = CHUNK_SIZE;
 
-	comunicacao(grid, prox, ante, chunk, status);
-	comunicacao(grid, prox, ante, chunk, status);
-	comunicacao(grid, prox, ante, chunk, status);
+	iteracao(grid, CHUNK_SIZE, PROX, ANTE, status);
 
 	if(processId == 1){
 		printf("%d\n",grid[CHUNK_SIZE - 1][0]);
