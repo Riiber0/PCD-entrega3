@@ -91,6 +91,8 @@ int main(int argc, char** argv){
 	int prox = PROX, ante = ANTE, chunk = CHUNK_SIZE;
 
 	comunicacao(grid, prox, ante, chunk, status);
+	comunicacao(grid, prox, ante, chunk, status);
+	comunicacao(grid, prox, ante, chunk, status);
 
 	if(processId == 1){
 		printf("%d\n",grid[CHUNK_SIZE - 1][0]);
