@@ -5,7 +5,7 @@
 
 #define PROX ((processId + 1) % noProcesses)
 #define ANTE ((noProcesses + processId - 1) % noProcesses)
-#define NUNM_IT 2000
+#define NUM_IT 50
 #define SIZE 2048
 #define CHUNK_SIZE 2048/noProcesses + 2
 
@@ -53,10 +53,46 @@ void comunicacao(int **tab, int prox, int ante, int chunk, MPI_Status status){
 
 }
 
+int conta_vizinho(int i, int j, int** grid){
+
+	int cont = 0;
+	if(grid[i - 1][(SIZE + j - 1) % SIZE] == 1) cont++;
+	if(grid[i - 1][j ] == 1)cont++;
+	if(grid[i - 1][(j + 1) & SIZE] == 1)cont++;
+	if(grid[i ][(SIZE + j - 1) % SIZE] == 1)cont++;
+	if(grid[i ][(j + 1) % SIZE] == 1)cont++;
+	if(grid[i + 1][(SIZE + j - 1) % SIZE] == 1)cont++;
+	if(grid[i + 1][j ] == 1)cont++;
+	if(grid[i + 1][(j + 1) % SIZE] == 1)cont++;
+
+	return cont;
+
+}
+
 void iteracao(int **grid, int chunk, int prox, int ante, MPI_Status status){
 
-	for(int i = 0; i < NUNM_IT; i++){
+	int vizinhos, lins = chunk-1;
+	int **ngrid = tab_init(chunk);
+	int **swap;
+
+	for(int it = 0; it < NUM_IT; it++){
+
 		comunicacao(grid, prox, ante, chunk, status);
+		for(int i = 1; i < lins; i++){
+
+			for(int j = 0; j < SIZE; j++){
+				vizinhos = conta_vizinho(i, j, grid);
+				
+				if(grid[i][j] == 1 && (vizinhos == 2 || vizinhos == 3))ngrid[i][j] = 1;
+				else if(grid[i][j] == 0 && vizinhos == 3)ngrid[i][j] = 1;
+				else ngrid[i][j] = 0;
+			}
+		}
+
+		swap = grid;
+		grid = ngrid;
+		ngrid = swap;
+
 	}
 
 }
