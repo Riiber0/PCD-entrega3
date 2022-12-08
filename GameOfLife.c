@@ -1,13 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <strings.h>
+#include <string.h>
 #include "mpi.h"
 
 #define PROX ((processId + 1) % noProcesses)
 #define ANTE ((noProcesses + processId - 1) % noProcesses)
-#define NUM_IT 50
+#define NUM_IT 2000
 #define SIZE 2048
-#define CHUNK_SIZE 2048/noProcesses + 2
+#define CHUNK_SIZE SIZE/noProcesses + 2
 
 int** tab_init(int chunk){
 
@@ -32,25 +32,46 @@ void tab_finish(int **tab, int chunk){
 
 }
 
-void comunicacao(int **tab, int prox, int ante, int chunk, MPI_Status status){
+int** comunicacao(int **tab, int prox, int ante, int chunk, MPI_Status status){
 
 	int *buf_1 = (int*)malloc(sizeof(int) * SIZE);
-
-	MPI_Sendrecv(tab[chunk-2], SIZE, MPI_INTEGER, prox, 7765, 
-				 buf_1, SIZE, MPI_INTEGER, ante, 7765, MPI_COMM_WORLD, &status);
-
-	tab[0] = buf_1;
+	bzero(buf_1, sizeof(int) * SIZE);
 	int *buf_2 = (int*)malloc(sizeof(int) * SIZE);
+	bzero(buf_2, sizeof(int) * SIZE);
 
-	MPI_Sendrecv(tab[1], SIZE, MPI_INTEGER, ante, 7764, 
-				 buf_2, SIZE, MPI_INTEGER, prox, 7764, MPI_COMM_WORLD, &status);
+	if(MPI_Sendrecv(tab[chunk-2], SIZE, MPI_INTEGER, prox, 7765, 
+				 buf_1, SIZE, MPI_INTEGER, ante, 7765, MPI_COMM_WORLD, &status) == -1) perror("send 1");
 
-	tab[chunk-1] = buf_2;
 
-	buf_1 = buf_2 = NULL;
+	if(MPI_Sendrecv(tab[1], SIZE, MPI_INTEGER, ante, 7764, 
+				 buf_2, SIZE, MPI_INTEGER, prox, 7764, MPI_COMM_WORLD, &status) == -1) perror("send 2");
+
+
+	bzero(tab[0], sizeof(int) * SIZE);
+	bzero(tab[chunk-1], sizeof(int) * SIZE);
+	memcpy(tab[0], buf_1, sizeof(int) * SIZE);
+	memcpy(tab[chunk-1], buf_2, sizeof(int) * SIZE);
+
+	
+	//buf_1 = buf_2 = NULL;
 	free(buf_2);
 	free(buf_1);
+	
 
+	return tab;
+
+}
+
+void printa(int** grid){
+	int lin, col, sum = 0; 
+	for(lin = 1; lin < 51; lin++){
+		for(col = 0; col < 50; col++){
+			printf("%d ",grid[lin][col]);
+			if(grid[lin][col] == 1) sum++;
+		}
+		printf("\n");
+	}
+	printf("resultado dessa iteracao: %d\n\n",sum);
 }
 
 int conta_vizinho(int i, int j, int** grid){
@@ -58,7 +79,7 @@ int conta_vizinho(int i, int j, int** grid){
 	int cont = 0;
 	if(grid[i - 1][(SIZE + j - 1) % SIZE] == 1) cont++;
 	if(grid[i - 1][j ] == 1)cont++;
-	if(grid[i - 1][(j + 1) & SIZE] == 1)cont++;
+	if(grid[i - 1][(j + 1) % SIZE] == 1)cont++;
 	if(grid[i ][(SIZE + j - 1) % SIZE] == 1)cont++;
 	if(grid[i ][(j + 1) % SIZE] == 1)cont++;
 	if(grid[i + 1][(SIZE + j - 1) % SIZE] == 1)cont++;
@@ -69,7 +90,7 @@ int conta_vizinho(int i, int j, int** grid){
 
 }
 
-void iteracao(int **grid, int chunk, int prox, int ante, MPI_Status status){
+int** iteracao(int **grid, int chunk, int prox, int ante, MPI_Status status, int id){
 
 	int vizinhos, lins = chunk-1;
 	int **ngrid = tab_init(chunk);
@@ -77,7 +98,7 @@ void iteracao(int **grid, int chunk, int prox, int ante, MPI_Status status){
 
 	for(int it = 0; it < NUM_IT; it++){
 
-		comunicacao(grid, prox, ante, chunk, status);
+		grid = comunicacao(grid, prox, ante, chunk, status);
 		for(int i = 1; i < lins; i++){
 
 			for(int j = 0; j < SIZE; j++){
@@ -89,11 +110,30 @@ void iteracao(int **grid, int chunk, int prox, int ante, MPI_Status status){
 			}
 		}
 
+		MPI_Barrier(MPI_COMM_WORLD);
 		swap = grid;
 		grid = ngrid;
 		ngrid = swap;
 
+		if(id == 0 && it < 5) printa(grid);
+
 	}
+
+	return grid;
+
+}
+
+int conta(int **grid, int chunk){
+	int lins = chunk - 1;
+	int cont = 0;
+
+	for(int i = 1; i < lins; i++){
+		for(int j = 0; j < SIZE; j++){
+			if(grid[i][j]) cont++;
+		}
+	}
+
+	return cont;
 
 }
 
@@ -112,9 +152,9 @@ int main(int argc, char** argv){
 
 	int **grid = tab_init(CHUNK_SIZE);
 
-	if(!processId){
+	if(processId == 0){
 		//GLIDER
-		int lin = 2, col = 0;
+		int lin = 2, col = 1;
 		grid[lin  ][col+1] = 1;
 		grid[lin+1][col+2] = 1;
 		grid[lin+2][col  ] = 1;
@@ -129,16 +169,20 @@ int main(int argc, char** argv){
 		grid[lin+1][col+1] = 1;
 		grid[lin+2][col+1] = 1;
 
-		grid[1][0] = 9;
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	int prox = PROX, ante = ANTE, chunk = CHUNK_SIZE;
 
-	iteracao(grid, CHUNK_SIZE, PROX, ANTE, status);
+	grid = iteracao(grid, CHUNK_SIZE, PROX, ANTE, status, processId);
 
-	if(processId == 1){
-		printf("%d\n",grid[CHUNK_SIZE - 1][0]);
+	int send_buf = conta(grid, CHUNK_SIZE);
+	printf("%d - %d\n", processId, send_buf);
+	int rcv_buf;
+	MPI_Reduce(&send_buf, &rcv_buf, 1, MPI_INTEGER, MPI_SUM, 0, MPI_COMM_WORLD);
+	if(processId == 0){
+
+		printf("%d\n", rcv_buf);
+
 	}
 
 	
