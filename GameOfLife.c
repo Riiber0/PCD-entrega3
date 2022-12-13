@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
+#include <time.h>
 #include "mpi.h"
 
 #define PROX ((processId + 1) % noProcesses)
@@ -110,7 +112,6 @@ int** iteracao(int **grid, int chunk, int prox, int ante, MPI_Status status, int
 			}
 		}
 
-		MPI_Barrier(MPI_COMM_WORLD);
 		swap = grid;
 		grid = ngrid;
 		ngrid = swap;
@@ -144,6 +145,9 @@ int main(int argc, char** argv){
 	int nameSize; /* Tamanho do nome */
 	char computerName[MPI_MAX_PROCESSOR_NAME];
 	MPI_Status status;
+
+	struct timespec t1, t2;
+	clock_gettime(1, &t1);
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &noProcesses);
@@ -189,6 +193,12 @@ int main(int argc, char** argv){
 	tab_finish(grid, CHUNK_SIZE);
 
 	MPI_Finalize();
+	clock_gettime(1, &t2);
+	int milsec_time = (t2.tv_sec - t1.tv_sec) * 1000;
+	milsec_time += (t2.tv_nsec + t1.tv_nsec) / 1000000;
+
+	printf("%d\n", milsec_time);
+
 	return 0;
 
 }
